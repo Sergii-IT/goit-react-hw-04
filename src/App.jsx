@@ -1,49 +1,68 @@
-import { useState, useEffect } from "react";
-import ContactForm from "./components/ContactForm/ContactForm";
-import SearchBox from "./components/SearchBox/SearchBox";
-import ContactList from "./components/ContactList/ContactList";
-import  "./App.css";
-import { nanoid } from 'nanoid';
+import './modal-config';
+import { useEffect, useState } from 'react';
+import { SearchBar } from './components/SearchBar/SearchBar';
+import { ImageGallery } from './components/ImageGallery/ImageGallery';
+import { Loader } from './components/Loader/Loader';
+import { ErrorMessage } from './components/ErrorMessage/ErrorMessage';
+import { LoadMoreBtn } from './components/LoadMoreBtn/LoadMoreBtn';
+import { ImageModal } from './components/ImageModal/ImageModal';
+import { searchImages } from './services/unsplash-api';
 
-const LS_KEY = 'contacts';
-
-const App = () => {
-  const [contacts, setContacts] = useState(() => {
-    const saved = localStorage.getItem(LS_KEY);
-    return saved ? JSON.parse(saved) : [
-      { id: 'id-1', name: 'Rosie Simpson', number: '459-12-56' },
-      { id: 'id-2', name: 'Hermione Kline', number: '443-89-12' },
-      { id: 'id-3', name: 'Eden Clements', number: '645-17-79' },
-      { id: 'id-4', name: 'Annie Copeland', number: '227-91-26' },
-    ];
-  });
-  const [filter, setFilter] = useState('');
+function App() {
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(contacts));
-  }, [contacts]);
+    if (!query) return;
+    const fetchImages = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await searchImages(query, page);
+        setImages(prev => [...prev, ...data.results]);
+        setTotalPages(data.total_pages);
+      } catch (err) {
+        setError('Failed to fetch images');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchImages();
+  }, [query, page]);
 
-  const addContact = (name, number) => {
-    const newContact = { id: nanoid(), name, number };
-    setContacts(prev => [...prev, newContact]);
+  const handleSearch = newQuery => {
+    if (newQuery === query) return;
+    setQuery(newQuery);
+    setImages([]);
+    setPage(1);
   };
 
-  const deleteContact = id => {
-    setContacts(prev => prev.filter(contact => contact.id !== id));
-  };
-
-  const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(filter.toLowerCase())
-  );
+  const handleLoadMore = () => setPage(prev => prev + 1);
 
   return (
-    <div className="container">
-      <h1>Phonebook</h1>
-      <ContactForm onAdd={addContact} />
-      <SearchBox value={filter} onChange={setFilter} />
-      <ContactList contacts={filteredContacts} onDelete={deleteContact} />
+    <div>
+      <SearchBar onSubmit={handleSearch} />
+      {error && <ErrorMessage message={error} />}
+      <ImageGallery images={images} onImageClick={setSelectedImage} />
+      {isLoading && <Loader />}
+      {images.length > 0 && page < totalPages && (
+        <LoadMoreBtn onClick={handleLoadMore} />
+      )}
+      {selectedImage && (
+  <ImageModal
+    key={selectedImage.id}
+    isOpen={true}
+    onRequestClose={() => setSelectedImage(null)}
+    image={selectedImage}
+  />
+)}
     </div>
   );
-};
+}
 
 export default App;
